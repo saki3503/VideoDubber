@@ -5,7 +5,10 @@ import os
 import uuid
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip, AudioFileClip
-from google.cloud import texttospeech
+from google.oauth2 import service_account
+import google.auth
+from google.auth.transport.requests import Request
+from google.cloud import texttospeech_v1 as texttospeech
 from google.cloud import translate_v2 as translate
 import whisper
 import spacy
@@ -74,6 +77,7 @@ def extract_audio_from_video(video_file):
         print(f"Error extracting audio from video: {e}")
         return None
 
+
 def transcribe_audio(audio_file, source_language):
     try:
         model = whisper.load_model("large")
@@ -82,6 +86,7 @@ def transcribe_audio(audio_file, source_language):
     except Exception as e:
         print(f"Error transcribing audio: {e}")
         return None
+
 
 def translate_text(texts, target_language):
     try:
@@ -92,20 +97,20 @@ def translate_text(texts, target_language):
         print(f"Error translating texts: {e}")
         return None
 
-def create_audio_from_text(text, target_language, target_voice):
+def create_audio_from_text(text, target_language, target_voice, api_key):
     audio_file = "translated_" + str(uuid.uuid4()) + ".wav"
     try:
-        client = texttospeech.TextToSpeechClient()
+        client = texttospeech.TextToSpeechClient(client_options={"api_key": api_key})
         input_text = texttospeech.SynthesisInput(text=text)
         voice = texttospeech.VoiceSelectionParams(
             language_code=target_language,
-            name=target_voice
+            name="hi-IN-Standard-A"
         )
         audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.LINEAR16, speaking_rate=1.1
         )
         response = client.synthesize_speech(
-            request={"input": input_text, "voice": voice, "audio_config": audio_config}
+            input=input_text, voice=voice, audio_config=audio_config
         )
         with open(audio_file, "wb") as out:
             out.write(response.audio_content)
@@ -114,6 +119,7 @@ def create_audio_from_text(text, target_language, target_voice):
         if os.path.isfile(audio_file):
             os.remove(audio_file)
         raise Exception(f"Error creating audio from text: {e}")
+   
 
 def merge_audio_files(transcription, source_language, target_language, target_voice, audio_file):
     temp_files = []
@@ -250,28 +256,18 @@ uploaded_file = st.file_uploader("Upload a video", type=["mp4", "avi"])
 # Process the video and display it
 if uploaded_file is not None:
     st.write("Original Video:")
-    with NamedTemporaryFile(delete=False) as temp_file:
+    with NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
         temp_file.write(uploaded_file.read())
         temp_file_path = temp_file.name
 
-    video_capture = cv2.VideoCapture(temp_file_path)
-    while True:
-        ret, frame = video_capture.read()
-        if not ret:
-            break
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        st.image(frame_rgb, channels="RGB")
-
-    video_capture.release()
+    # Use st.video to display the video
+    st.video(temp_file_path)
 
     st.write("Processing...")
     
-    # Google Cloud credentials JSON file
-    google_credentials = "path/to/your/google-credentials.json"
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_credentials
-
+    api_key = "YOUR_API_KEY"
     # Dubbing voice settings
-    target_voice = "es-US-Neural2-B"
+    target_voice = "hi-IN-Standard-C"
     source_language = "english"
 
     # Extract, transcribe, translate, and merge audio files
